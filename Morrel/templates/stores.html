@@ -1,0 +1,241 @@
+{% extends "base.html" %}
+{% block title %}Browse Stores — {{ settings.site_name }}{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+<style>
+  #browse-map { height: 440px; width: 100%; border-radius: var(--radius); }
+  .filter-chip {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.3rem 0.85rem;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    border: 2px solid var(--border);
+    cursor: pointer;
+    transition: all .2s;
+    text-decoration: none;
+    color: var(--text);
+  }
+  .filter-chip:hover, .filter-chip.active {
+    background: var(--primary);
+    border-color: var(--primary);
+    color: white;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<section class="page-header">
+  <div class="container">
+    <h1>Browse Local Stores</h1>
+    <p>Explore {{ stores.total }} store{{ 's' if stores.total != 1 }} in your community</p>
+  </div>
+</section>
+
+<section class="py-4">
+  <div class="container">
+
+    <!-- SEARCH + FILTER BAR -->
+    <div class="card" style="padding:1.5rem;margin-bottom:2rem;">
+      <form method="GET" action="{{ url_for('stores') }}" id="searchForm">
+        <div style="display:flex;gap:1rem;flex-wrap:wrap;align-items:flex-end;">
+          <div style="flex:1;min-width:200px;" class="form-group" style="margin-bottom:0;">
+            <label>Search Stores</label>
+            <input type="text" name="q" value="{{ query }}" class="form-control"
+                   placeholder="Store name, description, address…" id="searchInput">
+          </div>
+          <div style="min-width:220px;" class="form-group" style="margin-bottom:0;">
+            <label>Category</label>
+            <select name="category" class="form-control" onchange="this.form.submit()">
+              <option value="">All Categories</option>
+              {% for cat in all_categories %}
+              <option value="{{ cat }}" {% if cat == selected_category %}selected{% endif %}>{{ cat }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div>
+            <button type="submit" class="btn btn-primary">🔍 Search</button>
+            {% if query or selected_category or selected_tag %}
+            <a href="{{ url_for('stores') }}" class="btn btn-outline" style="margin-left:0.4rem;">✕ Clear</a>
+            {% endif %}
+          </div>
+        </div>
+      </form>
+
+      <!-- TAGS -->
+      {% if all_tags %}
+      <div style="margin-top:1rem;display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center;">
+        <span style="font-size:0.82rem;font-weight:600;opacity:0.6;">Tags:</span>
+        {% for tag in all_tags %}
+        <a href="{{ url_for('stores', tag=tag, q=query, category=selected_category) }}"
+           class="filter-chip {% if tag == selected_tag %}active{% endif %}">
+          {{ tag }}
+        </a>
+        {% endfor %}
+      </div>
+      {% endif %}
+    </div>
+
+    <!-- MAP VIEW -->
+    <div class="card mb-2" style="overflow:hidden;">
+      <div style="padding:1rem 1.5rem;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;">
+        <p style="font-weight:700;">📍 Store Map</p>
+        <button onclick="locateMe()" class="btn btn-outline btn-sm">Use My Location</button>
+      </div>
+      <div id="browse-map"></div>
+    </div>
+
+    <!-- RESULTS GRID -->
+    {% if stores.items %}
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
+      <p style="font-size:0.9rem;opacity:0.65;">
+        Showing <strong>{{ stores.items|length }}</strong> of <strong>{{ stores.total }}</strong> stores
+        {% if query %}for "<em>{{ query }}</em>"{% endif %}
+        {% if selected_category %}in <em>{{ selected_category }}</em>{% endif %}
+      </p>
+    </div>
+
+    <div class="grid grid-3">
+      {% for store in stores.items %}
+      <a href="{{ url_for('store_detail', store_id=store.id) }}" style="text-decoration:none;">
+        <div class="card store-card">
+          {% if store.logo %}
+            <img src="{{ url_for('static', filename=store.logo) }}" class="store-logo" alt="{{ store.name }}">
+          {% else %}
+            <div class="logo-placeholder">{{ store.name[0].upper() }}</div>
+          {% endif %}
+          <div class="store-body">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:0.3rem;">
+              <span class="badge badge-primary" style="font-size:0.7rem;">{{ store.category }}</span>
+            </div>
+            <p class="store-name">{{ store.name }}</p>
+            <p class="store-address">📍 {{ store.address[:55] }}{% if store.address|length > 55 %}…{% endif %}</p>
+            {% if store.phone %}
+            <p style="font-size:0.82rem;opacity:0.65;margin-top:0.2rem;">📞 {{ store.phone }}</p>
+            {% endif %}
+            <div class="store-tags">
+              {% for tag in store.get_tags()[:4] %}
+                <span class="badge badge-outline" style="font-size:0.7rem;">{{ tag }}</span>
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+      </a>
+      {% endfor %}
+    </div>
+
+    <!-- PAGINATION -->
+    {% if stores.pages > 1 %}
+    <div class="pagination">
+      {% if stores.has_prev %}
+        <a href="{{ url_for('stores', page=stores.prev_num, q=query, category=selected_category, tag=selected_tag) }}">← Prev</a>
+      {% endif %}
+      {% for p in stores.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+        {% if p %}
+          {% if p == stores.page %}
+            <span class="active">{{ p }}</span>
+          {% else %}
+            <a href="{{ url_for('stores', page=p, q=query, category=selected_category, tag=selected_tag) }}">{{ p }}</a>
+          {% endif %}
+        {% else %}
+          <span>…</span>
+        {% endif %}
+      {% endfor %}
+      {% if stores.has_next %}
+        <a href="{{ url_for('stores', page=stores.next_num, q=query, category=selected_category, tag=selected_tag) }}">Next →</a>
+      {% endif %}
+    </div>
+    {% endif %}
+
+    {% else %}
+    <div style="text-align:center;padding:4rem 2rem;background:var(--card-bg);border-radius:var(--radius);box-shadow:var(--shadow);">
+      <div style="font-size:3rem;margin-bottom:1rem;">🔍</div>
+      <p style="font-family:var(--font-display);font-size:1.5rem;font-weight:700;margin-bottom:0.5rem;">No stores found</p>
+      <p style="opacity:0.6;margin-bottom:1.5rem;">Try adjusting your search or browse all stores.</p>
+      <a href="{{ url_for('stores') }}" class="btn btn-primary">Browse All Stores</a>
+    </div>
+    {% endif %}
+
+  </div>
+</section>
+
+<script>
+let map, markers = [];
+
+function initMap() {
+  // Wait for Leaflet to load
+  if (typeof L === 'undefined') {
+    console.error('Leaflet library not loaded yet');
+    setTimeout(initMap, 100);
+    return;
+  }
+
+  try {
+    map = L.map('browse-map', { 
+      attributionControl: true, 
+      zoomControl: true 
+    }).setView([23.7, 92.7], 12);
+    
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+    }).addTo(map);
+
+    setTimeout(() => {
+      if (map) map.invalidateSize();
+    }, 150);
+
+    fetch('/api/stores/nearby')
+      .then(r => r.json())
+      .then(stores => {
+        const bounds = L.latLngBounds();
+        stores.forEach(store => {
+          const marker = L.marker([store.lat, store.lng]).addTo(map);
+          marker.bindPopup(`
+            <div style="font-family:sans-serif;max-width:220px;">
+              <strong style="color:#2d6a4f;">${store.name}</strong>
+              <p style="font-size:12px;color:#666;margin:4px 0;">${store.category}</p>
+              <p style="font-size:11px;color:#888;">${store.address}</p>
+              <a href="/store/${store.id}" style="color:#2d6a4f;font-size:12px;font-weight:600;">View Details →</a>
+            </div>
+          `);
+          markers.push(marker);
+          bounds.extend([store.lat, store.lng]);
+        });
+
+        if (stores.length > 0) {
+          map.fitBounds(bounds, { padding: [50, 50] });
+        }
+      })
+      .catch(err => console.error('Error fetching stores:', err));
+    
+    console.log('Browse map initialized successfully');
+  } catch (err) {
+    console.error('Error initializing browse map:', err);
+  }
+}
+
+function locateMe() {
+  if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(pos => {
+      const loc = [pos.coords.latitude, pos.coords.longitude];
+      map.setView(loc, 14);
+      L.circleMarker(loc, {
+        radius: 8,
+        color: '#2563eb',
+        fillColor: '#bfdbfe',
+        fillOpacity: 0.9
+      }).addTo(map).bindPopup('Your Location').openPopup();
+    });
+  } else {
+    alert('Geolocation is not supported by your browser.');
+  }
+}
+
+document.addEventListener('DOMContentLoaded', initMap);
+</script>
+{% endblock %}

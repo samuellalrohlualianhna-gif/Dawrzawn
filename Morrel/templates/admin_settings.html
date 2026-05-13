@@ -1,0 +1,158 @@
+{% extends "base.html" %}
+{% block title %}Site Settings — Admin{% endblock %}
+
+{% block content %}
+<section class="page-header">
+  <div class="container">
+    <h1>Site Settings</h1>
+    <p>Customize your directory's branding, colors and API keys</p>
+  </div>
+</section>
+
+<section class="py-4">
+  <div class="container two-col">
+    <div class="sidebar">
+      <p class="sidebar-title">Admin Panel</p>
+      <a href="{{ url_for('admin_dashboard') }}" class="sidebar-link">📊 Overview</a>
+      <a href="{{ url_for('admin_stores', status='pending') }}" class="sidebar-link">⏳ Pending Stores</a>
+      <a href="{{ url_for('admin_stores') }}" class="sidebar-link">🏪 All Stores</a>
+      <a href="{{ url_for('admin_users') }}" class="sidebar-link">👥 Users</a>
+      <a href="{{ url_for('admin_settings') }}" class="sidebar-link active">🎨 Site Settings</a>
+      <hr style="border:none;border-top:1px solid var(--border);margin:1rem 0;">
+      <a href="{{ url_for('stores') }}" class="sidebar-link">🌐 View Site</a>
+      <a href="{{ url_for('logout') }}" class="sidebar-link" style="color:#ef4444;">🚪 Logout</a>
+    </div>
+
+    <div>
+      <form method="POST" enctype="multipart/form-data">
+
+        <!-- Site Identity -->
+        <div class="card" style="padding:2rem;margin-bottom:1.5rem;">
+          <h2 style="font-family:var(--font-display);font-size:1.2rem;color:var(--primary);margin-bottom:1.5rem;">🏷 Site Identity</h2>
+
+          <div class="grid grid-2">
+            <div class="form-group">
+              <label>Site Name</label>
+              <input type="text" name="site_name" class="form-control" value="{{ settings.site_name }}" required>
+            </div>
+            <div class="form-group">
+              <label>Tagline</label>
+              <input type="text" name="tagline" class="form-control" value="{{ settings.tagline }}">
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label>Site Logo</label>
+            {% if settings.logo %}
+            <div style="margin-bottom:0.7rem;display:flex;align-items:center;gap:0.8rem;">
+              <img src="{{ url_for('static', filename=settings.logo) }}"
+                   style="height:48px;max-width:150px;object-fit:contain;border-radius:8px;border:2px solid var(--border);">
+              <span style="font-size:0.82rem;opacity:0.6;">Current logo</span>
+            </div>
+            {% endif %}
+            <input type="file" name="site_logo" accept="image/*" class="form-control"
+                   style="padding:0.5rem;" onchange="previewSiteLogo(this)">
+            <div id="siteLogoPreview" style="margin-top:0.6rem;display:none;">
+              <img id="siteLogoImg" style="height:48px;max-width:150px;object-fit:contain;border-radius:8px;border:2px solid var(--primary);">
+            </div>
+            <p style="font-size:0.78rem;opacity:0.55;margin-top:0.3rem;">PNG, JPG, SVG — shown in the navbar. Ideal: square, 200×200px.</p>
+          </div>
+
+          <div class="form-group">
+            <label>Footer Text</label>
+            <input type="text" name="footer_text" class="form-control" value="{{ settings.footer_text }}">
+          </div>
+        </div>
+
+        <!-- Theme Colors -->
+        <div class="card" style="padding:2rem;margin-bottom:1.5rem;">
+          <h2 style="font-family:var(--font-display);font-size:1.2rem;color:var(--primary);margin-bottom:0.5rem;">🎨 Theme Colors</h2>
+          <p style="font-size:0.85rem;opacity:0.6;margin-bottom:1.5rem;">Changes apply site-wide after saving.</p>
+
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:1.2rem;">
+            {% set color_fields = [
+              ('primary_color', 'Primary Color', settings.primary_color, 'Main brand color for buttons, headers'),
+              ('secondary_color', 'Secondary Color', settings.secondary_color, 'Gradient and hover states'),
+              ('accent_color', 'Accent Color', settings.accent_color, 'Highlights and CTAs'),
+              ('bg_color', 'Background Color', settings.bg_color, 'Page background'),
+              ('text_color', 'Text Color', settings.text_color, 'Main body text'),
+            ] %}
+            {% for name, label, val, hint in color_fields %}
+            <div class="form-group">
+              <label>{{ label }}</label>
+              <div class="color-input-wrap">
+                <input type="color" id="{{ name }}_picker" value="{{ val }}"
+                       oninput="document.getElementById('{{ name }}_text').value=this.value">
+                <input type="text" name="{{ name }}" id="{{ name }}_text" class="form-control"
+                       value="{{ val }}" style="font-family:monospace;font-size:0.85rem;"
+                       oninput="document.getElementById('{{ name }}_picker').value=this.value">
+              </div>
+              <p style="font-size:0.75rem;opacity:0.5;margin-top:0.2rem;">{{ hint }}</p>
+            </div>
+            {% endfor %}
+          </div>
+
+          <!-- Live preview -->
+          <div id="colorPreview" style="margin-top:1.2rem;border-radius:var(--radius-sm);overflow:hidden;border:2px solid var(--border);">
+            <div id="previewBar" style="background:{{ settings.primary_color }};padding:0.8rem 1.2rem;display:flex;align-items:center;gap:0.6rem;">
+              <div style="width:28px;height:28px;background:rgba(255,255,255,0.25);border-radius:6px;"></div>
+              <span style="color:white;font-weight:700;font-size:0.9rem;">{{ settings.site_name }}</span>
+            </div>
+            <div id="previewBody" style="background:{{ settings.bg_color }};padding:1.2rem 1.2rem;display:flex;gap:0.7rem;align-items:center;">
+              <div id="previewBtn" style="background:{{ settings.primary_color }};color:white;padding:0.4rem 1rem;border-radius:20px;font-size:0.82rem;font-weight:600;">Button</div>
+              <div id="previewAccent" style="background:{{ settings.accent_color }};color:#111;padding:0.4rem 1rem;border-radius:20px;font-size:0.82rem;font-weight:600;">Accent</div>
+              <div id="previewText" style="color:{{ settings.text_color }};font-size:0.88rem;">Sample text preview</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card" style="padding:2rem;margin-bottom:1.5rem;">
+          <h2 style="font-family:var(--font-display);font-size:1.2rem;color:var(--primary);margin-bottom:0.5rem;">🗺 Map Provider</h2>
+          <p style="font-size:0.85rem;opacity:0.6;margin-bottom:1rem;">The site now uses Leaflet with OpenStreetMap tiles for all maps and location picking. No API key is required.</p>
+          <div style="background:#ecfdf5;border-left:3px solid #22c55e;padding:0.7rem 1rem;border-radius:0 8px 8px 0;font-size:0.83rem;">
+            Your store registration, browse maps, and store detail location views are powered by open, free map tiles.
+          </div>
+        </div>
+
+        <div style="display:flex;justify-content:flex-end;">
+          <button type="submit" class="btn btn-primary btn-lg">💾 Save All Settings</button>
+        </div>
+
+      </form>
+    </div>
+  </div>
+</section>
+
+<script>
+function previewSiteLogo(input) {
+  if (input.files && input.files[0]) {
+    const reader = new FileReader();
+    reader.onload = e => {
+      document.getElementById('siteLogoImg').src = e.target.result;
+      document.getElementById('siteLogoPreview').style.display = 'block';
+    };
+    reader.readAsDataURL(input.files[0]);
+  }
+}
+
+// Live color preview
+['primary_color','secondary_color','accent_color','bg_color','text_color'].forEach(k => {
+  const input = document.getElementById(k + '_text');
+  if (input) {
+    input.addEventListener('input', updatePreview);
+  }
+});
+
+function updatePreview() {
+  const p = document.getElementById('primary_color_text').value;
+  const a = document.getElementById('accent_color_text').value;
+  const bg = document.getElementById('bg_color_text').value;
+  const txt = document.getElementById('text_color_text').value;
+  document.getElementById('previewBar').style.background = p;
+  document.getElementById('previewBody').style.background = bg;
+  document.getElementById('previewBtn').style.background = p;
+  document.getElementById('previewAccent').style.background = a;
+  document.getElementById('previewText').style.color = txt;
+}
+</script>
+{% endblock %}

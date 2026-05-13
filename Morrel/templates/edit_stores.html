@@ -1,0 +1,218 @@
+{% extends "base.html" %}
+{% block title %}Edit {{ store.name }} — {{ settings.site_name }}{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+{% endblock %}
+
+{% block content %}
+<section class="page-header">
+  <div class="container">
+    <h1>Edit Store</h1>
+    <p>Update your store information and location</p>
+  </div>
+</section>
+
+<section class="py-4">
+  <div class="container" style="max-width:860px;">
+    <form method="POST" enctype="multipart/form-data">
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;">
+
+        <!-- LEFT -->
+        <div>
+          <div class="card" style="padding:2rem;margin-bottom:1.5rem;">
+            <h2 style="font-family:var(--font-display);font-size:1.2rem;color:var(--primary);margin-bottom:1.2rem;">Store Info</h2>
+
+            <div class="form-group">
+              <label>Store Name *</label>
+              <input type="text" name="name" class="form-control" value="{{ store.name }}" required>
+            </div>
+
+            <div class="form-group">
+              <label>Category *</label>
+              <select name="category" class="form-control" required>
+                {% for cat in categories %}
+                <option value="{{ cat }}" {% if cat == store.category %}selected{% endif %}>{{ cat }}</option>
+                {% endfor %}
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label>Description</label>
+              <textarea name="description" class="form-control" rows="4">{{ store.description or '' }}</textarea>
+            </div>
+
+            <div class="form-group">
+              <label>Store Logo</label>
+              {% if store.logo %}
+              <div style="margin-bottom:0.6rem;">
+                <img src="{{ url_for('static', filename=store.logo) }}"
+                     style="height:60px;width:60px;object-fit:cover;border-radius:8px;border:2px solid var(--primary);">
+              </div>
+              {% endif %}
+              <input type="file" name="logo" accept="image/*" class="form-control" style="padding:0.5rem;">
+            </div>
+          </div>
+
+          <div class="card" style="padding:2rem;margin-bottom:1.5rem;">
+            <h2 style="font-family:var(--font-display);font-size:1.2rem;color:var(--primary);margin-bottom:1.2rem;">Contact</h2>
+
+            <div class="form-group">
+              <label>Phone</label>
+              <input type="tel" name="phone" class="form-control" value="{{ store.phone or '' }}">
+            </div>
+            <div class="form-group">
+              <label>Email</label>
+              <input type="email" name="email" class="form-control" value="{{ store.email or '' }}">
+            </div>
+            <div class="form-group">
+              <label>Website</label>
+              <input type="url" name="website" class="form-control" value="{{ store.website or '' }}">
+            </div>
+            <div class="form-group">
+              <label>Opening Hours</label>
+              <textarea name="opening_hours" class="form-control" rows="3">{{ store.opening_hours or '' }}</textarea>
+            </div>
+          </div>
+        </div>
+
+        <!-- RIGHT -->
+        <div>
+          <div class="card" style="padding:2rem;margin-bottom:1.5rem;">
+            <h2 style="font-family:var(--font-display);font-size:1.2rem;color:var(--primary);margin-bottom:0.5rem;">Location</h2>
+            <p style="font-size:0.85rem;opacity:0.6;margin-bottom:1rem;">Click or search to update location</p>
+
+            <div class="form-group">
+              <input type="text" id="addressSearch" class="form-control" placeholder="Search address…">
+            </div>
+            <div id="edit-map" style="height:280px;border-radius:var(--radius-sm);border:2px solid var(--border);margin-bottom:0.8rem;"></div>
+            <input type="hidden" name="latitude" id="lat_input" value="{{ store.latitude }}">
+            <input type="hidden" name="longitude" id="lng_input" value="{{ store.longitude }}">
+            <input type="hidden" name="address" id="addr_input" value="{{ store.address }}">
+            <p id="currentAddressText" style="font-size:0.78rem;opacity:0.55;padding:0 0.2rem;">Current: {{ store.address }}</p>
+          </div>
+
+          <div class="card" style="padding:2rem;">
+            <h2 style="font-family:var(--font-display);font-size:1.2rem;color:var(--primary);margin-bottom:1rem;">Tags</h2>
+            <div class="checkbox-grid">
+              {% for tag in tags %}
+              <label>
+                <input type="checkbox" name="tags" value="{{ tag }}"
+                       {% if tag in store.get_tags() %}checked{% endif %}>
+                <span>{{ tag }}</span>
+              </label>
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" style="padding:1.2rem 2rem;margin-top:1.5rem;display:flex;justify-content:space-between;align-items:center;">
+        <a href="{{ url_for('owner_dashboard') if not current_user.is_admin() else url_for('admin_stores') }}"
+           class="btn btn-outline">← Cancel</a>
+        <button type="submit" class="btn btn-primary btn-lg">Save Changes</button>
+      </div>
+
+    </form>
+  </div>
+</section>
+
+<script>
+let map, marker;
+
+function initMap() {
+  // Wait for Leaflet to load
+  if (typeof L === 'undefined') {
+    console.error('Leaflet library not loaded yet');
+    setTimeout(initMap, 100);
+    return;
+  }
+
+  try {
+    const pos = [{{ store.latitude }}, {{ store.longitude }}];
+    map = L.map('edit-map', { 
+      attributionControl: true, 
+      zoomControl: true 
+    }).setView(pos, 16);
+    
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+    }).addTo(map);
+
+    marker = L.marker(pos, { draggable: true }).addTo(map);
+    marker.on('dragend', e => updatePin(e.target.getLatLng()));
+    map.on('click', e => {
+      marker.setLatLng(e.latlng);
+      updatePin(e.latlng);
+    });
+
+    setTimeout(() => {
+      if (map) map.invalidateSize();
+    }, 150);
+
+    document.getElementById('addressSearch').addEventListener('keydown', e => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        geocodeAddress(document.getElementById('addressSearch').value);
+      }
+    });
+    
+    console.log('Edit map initialized successfully');
+  } catch (err) {
+    console.error('Error initializing edit map:', err);
+  }
+}
+
+async function geocodeAddress(query) {
+  if (!query) return;
+  const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5`;
+  try {
+    const response = await fetch(url);
+    const results = await response.json();
+    if (!results.length) {
+      alert('No address found. Try a different query.');
+      return;
+    }
+    const place = results[0];
+    const latlng = { lat: parseFloat(place.lat), lng: parseFloat(place.lon) };
+    map.setView(latlng, 16);
+    marker.setLatLng(latlng);
+    updatePin(latlng, place.display_name);
+    document.getElementById('addressSearch').value = place.display_name;
+  } catch (err) {
+    console.error(err);
+    alert('Address lookup failed.');
+  }
+}
+
+async function reverseGeocode(latlng) {
+  const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latlng.lat}&lon=${latlng.lng}`;
+  try {
+    const response = await fetch(url);
+    const data = await response.json();
+    return data && data.display_name ? data.display_name : `${latlng.lat.toFixed(6)}, ${latlng.lng.toFixed(6)}`;
+  } catch (err) {
+    console.error(err);
+    return `${latlng.lat.toFixed(6)}, ${latlng.lng.toFixed(6)}`;
+  }
+}
+
+async function updatePin(latlng, address) {
+  document.getElementById('lat_input').value = latlng.lat;
+  document.getElementById('lng_input').value = latlng.lng;
+  if (address) {
+    document.getElementById('addr_input').value = address;
+    document.getElementById('currentAddressText').textContent = `Current: ${address}`;
+  } else {
+    const display = await reverseGeocode(latlng);
+    document.getElementById('addr_input').value = display;
+    document.getElementById('currentAddressText').textContent = `Current: ${display}`;
+  }
+}
+
+document.addEventListener('DOMContentLoaded', initMap);
+</script>
+{% endblock %}

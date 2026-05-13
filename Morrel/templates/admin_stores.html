@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+{% block title %}Manage Stores — Admin{% endblock %}
+
+{% block content %}
+<section class="page-header">
+  <div class="container">
+    <h1>Manage Stores</h1>
+    <p>Review, approve and manage all store listings</p>
+  </div>
+</section>
+
+<section class="py-4">
+  <div class="container two-col">
+    <div class="sidebar">
+      <p class="sidebar-title">Admin Panel</p>
+      <a href="{{ url_for('admin_dashboard') }}" class="sidebar-link">📊 Overview</a>
+      <a href="{{ url_for('admin_stores', status='pending') }}" class="sidebar-link">⏳ Pending Stores</a>
+      <a href="{{ url_for('admin_stores') }}" class="sidebar-link active">🏪 All Stores</a>
+      <a href="{{ url_for('admin_users') }}" class="sidebar-link">👥 Users</a>
+      <a href="{{ url_for('admin_settings') }}" class="sidebar-link">🎨 Site Settings</a>
+      <hr style="border:none;border-top:1px solid var(--border);margin:1rem 0;">
+      <a href="{{ url_for('stores') }}" class="sidebar-link">🌐 View Site</a>
+      <a href="{{ url_for('logout') }}" class="sidebar-link" style="color:#ef4444;">🚪 Logout</a>
+    </div>
+
+    <div>
+      <!-- Filter Tabs -->
+      <div style="display:flex;gap:0.5rem;margin-bottom:1.5rem;flex-wrap:wrap;">
+        <a href="{{ url_for('admin_stores') }}" class="btn {% if status == 'all' %}btn-primary{% else %}btn-outline{% endif %} btn-sm">All Stores</a>
+        <a href="{{ url_for('admin_stores', status='pending') }}" class="btn {% if status == 'pending' %}btn-primary{% else %}btn-outline{% endif %} btn-sm">
+          Pending
+          {% set pc = store_pending_count() %}
+          {% if pc > 0 %} ({{ pc }}){% endif %}
+        </a>
+        <a href="{{ url_for('admin_stores', status='approved') }}" class="btn {% if status == 'approved' %}btn-primary{% else %}btn-outline{% endif %} btn-sm">Approved</a>
+      </div>
+
+      {% if stores %}
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Store</th>
+              <th>Category</th>
+              <th>Owner</th>
+              <th>Location</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for store in stores %}
+            <tr>
+              <td>
+                <div style="display:flex;align-items:center;gap:0.7rem;">
+                  {% if store.logo %}
+                  <img src="{{ url_for('static', filename=store.logo) }}"
+                       style="width:36px;height:36px;object-fit:cover;border-radius:6px;">
+                  {% else %}
+                  <div style="width:36px;height:36px;background:var(--primary);border-radius:6px;display:flex;align-items:center;justify-content:center;color:white;font-weight:700;font-size:0.8rem;">
+                    {{ store.name[0].upper() }}
+                  </div>
+                  {% endif %}
+                  <strong style="font-size:0.9rem;">{{ store.name }}</strong>
+                </div>
+              </td>
+              <td style="font-size:0.85rem;">{{ store.category }}</td>
+              <td style="font-size:0.85rem;">{{ store.owner.username }}</td>
+              <td style="font-size:0.8rem;opacity:0.65;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ store.address }}</td>
+              <td>
+                {% if not store.is_active %}
+                  <span class="badge badge-inactive">Inactive</span>
+                {% elif store.is_approved %}
+                  <span class="badge badge-approved">Live</span>
+                {% else %}
+                  <span class="badge badge-pending">Pending</span>
+                {% endif %}
+              </td>
+              <td>
+                <div style="display:flex;gap:0.3rem;flex-wrap:wrap;">
+                  <a href="{{ url_for('store_detail', store_id=store.id) }}" class="btn btn-outline btn-sm">View</a>
+                  <a href="{{ url_for('edit_store', store_id=store.id) }}" class="btn btn-outline btn-sm">Edit</a>
+                  {% if not store.is_approved %}
+                  <form method="POST" action="{{ url_for('approve_store', store_id=store.id) }}" style="display:inline;">
+                    <button class="btn btn-primary btn-sm">✓ Approve</button>
+                  </form>
+                  {% endif %}
+                  <form method="POST" action="{{ url_for('toggle_store', store_id=store.id) }}" style="display:inline;">
+                    <button class="btn btn-sm" style="background:{% if store.is_active %}#f59e0b{% else %}#10b981{% endif %};color:white;border:none;">
+                      {% if store.is_active %}Disable{% else %}Enable{% endif %}
+                    </button>
+                  </form>
+                  <form method="POST" action="{{ url_for('delete_store', store_id=store.id) }}"
+                        style="display:inline;" onsubmit="return confirm('Delete {{ store.name }}?')">
+                    <button class="btn btn-danger btn-sm">Delete</button>
+                  </form>
+                </div>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      {% else %}
+      <div class="card" style="padding:3rem;text-align:center;">
+        <p style="font-size:1.1rem;opacity:0.6;">No stores found in this category.</p>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</section>
+{% endblock %}

@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+{% block title %}My Dashboard — {{ settings.site_name }}{% endblock %}
+
+{% block content %}
+<section class="page-header">
+  <div class="container">
+    <h1>My Dashboard</h1>
+    <p>Manage your stores, {{ current_user.username }}</p>
+  </div>
+</section>
+
+<section class="py-4">
+  <div class="container two-col">
+
+    <!-- SIDEBAR -->
+    <div class="sidebar">
+      <p class="sidebar-title">Navigation</p>
+      <a href="{{ url_for('owner_dashboard') }}" class="sidebar-link active">🏪 My Stores</a>
+      <a href="{{ url_for('add_store') }}" class="sidebar-link">➕ Add New Store</a>
+      <a href="{{ url_for('stores') }}" class="sidebar-link">🔍 Browse Directory</a>
+
+      <hr style="border:none;border-top:1px solid var(--border);margin:1rem 0;">
+      <p class="sidebar-title">Account</p>
+      <div style="padding:0.6rem 0.8rem;font-size:0.85rem;">
+        <p><strong>{{ current_user.username }}</strong></p>
+        <p style="opacity:0.6;font-size:0.8rem;">{{ current_user.email }}</p>
+        <span class="badge badge-primary" style="margin-top:0.4rem;">Store Owner</span>
+      </div>
+      <a href="{{ url_for('logout') }}" class="sidebar-link" style="margin-top:0.5rem;color:#ef4444;">🚪 Logout</a>
+    </div>
+
+    <!-- MAIN -->
+    <div>
+      <!-- Stats -->
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;margin-bottom:2rem;">
+        <div class="stat-card">
+          <p class="stat-number">{{ stores|length }}</p>
+          <p class="stat-label">Total Stores</p>
+        </div>
+        <div class="stat-card secondary">
+          <p class="stat-number" style="color:var(--secondary);">{{ stores|selectattr('is_approved')|list|length }}</p>
+          <p class="stat-label">Approved</p>
+        </div>
+        <div class="stat-card accent">
+          <p class="stat-number" style="color:var(--accent);">{{ stores|rejectattr('is_approved')|list|length }}</p>
+          <p class="stat-label">Pending Review</p>
+        </div>
+      </div>
+
+      <!-- Stores List -->
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
+        <h2 style="font-family:var(--font-display);font-size:1.4rem;font-weight:700;">My Stores</h2>
+        <a href="{{ url_for('add_store') }}" class="btn btn-primary">+ Add Store</a>
+      </div>
+
+      {% if stores %}
+      <div style="display:flex;flex-direction:column;gap:1rem;">
+        {% for store in stores %}
+        <div class="card" style="padding:1.4rem;display:flex;gap:1.2rem;align-items:center;">
+          {% if store.logo %}
+          <img src="{{ url_for('static', filename=store.logo) }}"
+               style="width:64px;height:64px;object-fit:cover;border-radius:10px;flex-shrink:0;">
+          {% else %}
+          <div style="width:64px;height:64px;background:linear-gradient(135deg,var(--primary),var(--secondary));border-radius:10px;display:flex;align-items:center;justify-content:center;font-family:var(--font-display);font-size:1.4rem;font-weight:700;color:white;flex-shrink:0;">
+            {{ store.name[0].upper() }}
+          </div>
+          {% endif %}
+
+          <div style="flex:1;min-width:0;">
+            <div style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap;margin-bottom:0.2rem;">
+              <span style="font-family:var(--font-display);font-size:1.05rem;font-weight:700;">{{ store.name }}</span>
+              {% if store.is_approved %}
+                <span class="badge badge-approved">✓ Approved</span>
+              {% else %}
+                <span class="badge badge-pending">⏳ Pending</span>
+              {% endif %}
+              {% if not store.is_active %}
+                <span class="badge badge-inactive">Inactive</span>
+              {% endif %}
+            </div>
+            <p style="font-size:0.82rem;opacity:0.6;">{{ store.category }} · 📍 {{ store.address[:60] }}{% if store.address|length > 60 %}…{% endif %}</p>
+          </div>
+
+          <div style="display:flex;gap:0.5rem;flex-shrink:0;">
+            <a href="{{ url_for('store_detail', store_id=store.id) }}" class="btn btn-outline btn-sm">View</a>
+            <a href="{{ url_for('edit_store', store_id=store.id) }}" class="btn btn-outline btn-sm">Edit</a>
+            <form method="POST" action="{{ url_for('delete_store', store_id=store.id) }}"
+                  onsubmit="return confirm('Delete {{ store.name }}?')">
+              <button type="submit" class="btn btn-danger btn-sm">Delete</button>
+            </form>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+
+      {% else %}
+      <div class="card" style="padding:3rem;text-align:center;">
+        <div style="font-size:2.5rem;margin-bottom:1rem;">🏪</div>
+        <p style="font-family:var(--font-display);font-size:1.3rem;font-weight:700;margin-bottom:0.5rem;">No stores yet</p>
+        <p style="opacity:0.6;margin-bottom:1.5rem;">Register your first store to get started!</p>
+        <a href="{{ url_for('add_store') }}" class="btn btn-primary">+ Add Your First Store</a>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</section>
+{% endblock %}

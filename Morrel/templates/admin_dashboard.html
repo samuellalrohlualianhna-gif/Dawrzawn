@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+{% block title %}Admin Dashboard — {{ settings.site_name }}{% endblock %}
+
+{% block content %}
+<section class="page-header">
+  <div class="container">
+    <h1>⚙ Admin Dashboard</h1>
+    <p>Manage stores, users and site settings</p>
+  </div>
+</section>
+
+<section class="py-4">
+  <div class="container two-col">
+
+    <!-- SIDEBAR -->
+    <div class="sidebar">
+      <p class="sidebar-title">Admin Panel</p>
+      <a href="{{ url_for('admin_dashboard') }}" class="sidebar-link active">📊 Overview</a>
+      <a href="{{ url_for('admin_stores', status='pending') }}" class="sidebar-link">
+        ⏳ Pending Stores
+        {% set pc = store_pending_count() %}
+        {% if pc > 0 %}<span class="nav-badge" style="margin-left:auto;">{{ pc }}</span>{% endif %}
+      </a>
+      <a href="{{ url_for('admin_stores') }}" class="sidebar-link">🏪 All Stores</a>
+      <a href="{{ url_for('admin_users') }}" class="sidebar-link">👥 Users</a>
+      <a href="{{ url_for('admin_settings') }}" class="sidebar-link">🎨 Site Settings</a>
+      <hr style="border:none;border-top:1px solid var(--border);margin:1rem 0;">
+      <a href="{{ url_for('stores') }}" class="sidebar-link">🌐 View Site</a>
+      <a href="{{ url_for('logout') }}" class="sidebar-link" style="color:#ef4444;">🚪 Logout</a>
+    </div>
+
+    <!-- MAIN -->
+    <div>
+      <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:1rem;margin-bottom:2rem;">
+        <div class="stat-card">
+          <p class="stat-number">{{ total_stores }}</p>
+          <p class="stat-label">Total Stores</p>
+        </div>
+        <div class="stat-card accent">
+          <p class="stat-number" style="color:var(--accent);">{{ pending_stores }}</p>
+          <p class="stat-label">Pending Approval</p>
+        </div>
+        <div class="stat-card secondary">
+          <p class="stat-number" style="color:var(--secondary);">{{ approved_stores }}</p>
+          <p class="stat-label">Approved Stores</p>
+        </div>
+        <div class="stat-card" style="border-top-color:#6366f1;">
+          <p class="stat-number" style="color:#6366f1;">{{ total_users }}</p>
+          <p class="stat-label">Registered Users</p>
+        </div>
+      </div>
+
+      <!-- Pending stores quick action -->
+      {% if pending_stores > 0 %}
+      <div style="background:linear-gradient(135deg,var(--accent),#f59e0b);border-radius:var(--radius);padding:1.2rem 1.5rem;margin-bottom:1.5rem;display:flex;align-items:center;justify-content:space-between;color:#111;">
+        <div>
+          <p style="font-weight:700;font-size:1rem;">⏳ {{ pending_stores }} store{{ 's' if pending_stores != 1 }} awaiting approval</p>
+          <p style="font-size:0.85rem;opacity:0.8;">Review and approve or reject submitted stores</p>
+        </div>
+        <a href="{{ url_for('admin_stores', status='pending') }}" class="btn" style="background:rgba(0,0,0,0.15);color:#111;border-color:transparent;">Review Now →</a>
+      </div>
+      {% endif %}
+
+      <!-- Recent Stores -->
+      <h2 style="font-family:var(--font-display);font-size:1.3rem;font-weight:700;margin-bottom:1rem;">Recently Added Stores</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Store</th>
+              <th>Category</th>
+              <th>Owner</th>
+              <th>Status</th>
+              <th>Date</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for store in recent_stores %}
+            <tr>
+              <td><strong>{{ store.name }}</strong></td>
+              <td>{{ store.category }}</td>
+              <td>{{ store.owner.username }}</td>
+              <td>
+                {% if store.is_approved %}<span class="badge badge-approved">Approved</span>
+                {% else %}<span class="badge badge-pending">Pending</span>{% endif %}
+              </td>
+              <td style="font-size:0.8rem;opacity:0.7;">{{ store.created_at.strftime('%b %d') }}</td>
+              <td>
+                <a href="{{ url_for('store_detail', store_id=store.id) }}" class="btn btn-outline btn-sm">View</a>
+                {% if not store.is_approved %}
+                <form method="POST" action="{{ url_for('approve_store', store_id=store.id) }}" style="display:inline;">
+                  <button class="btn btn-primary btn-sm">Approve</button>
+                </form>
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+</section>
+{% endblock %}

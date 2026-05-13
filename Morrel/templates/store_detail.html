@@ -1,0 +1,177 @@
+{% extends "base.html" %}
+{% block title %}{{ store.name }} — {{ settings.site_name }}{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+{% endblock %}
+
+{% block content %}
+
+{% if not store.is_approved %}
+<div class="store-status-banner">⏳ This store is pending admin approval and is only visible to you.</div>
+{% endif %}
+
+{% if not store.is_active %}
+<div style="background:#fee2e2;color:#991b1b;text-align:center;padding:0.6rem;font-size:0.88rem;font-weight:600;">
+  ⚠ This store has been deactivated by an administrator.
+</div>
+{% endif %}
+
+<section class="py-4">
+  <div class="container">
+    <div style="display:grid;grid-template-columns:1fr 380px;gap:2.5rem;align-items:start;">
+
+      <!-- LEFT CONTENT -->
+      <div>
+        <!-- Header -->
+        <div class="card" style="padding:2rem;margin-bottom:1.5rem;">
+          <div style="display:flex;gap:1.5rem;align-items:flex-start;flex-wrap:wrap;">
+            {% if store.logo %}
+              <img src="{{ url_for('static', filename=store.logo) }}"
+                   style="width:100px;height:100px;object-fit:cover;border-radius:12px;border:3px solid var(--primary);" alt="{{ store.name }}">
+            {% else %}
+              <div style="width:100px;height:100px;background:linear-gradient(135deg,var(--primary),var(--secondary));border-radius:12px;display:flex;align-items:center;justify-content:center;font-family:var(--font-display);font-size:2.5rem;font-weight:700;color:white;flex-shrink:0;">
+                {{ store.name[0].upper() }}
+              </div>
+            {% endif %}
+
+            <div style="flex:1;">
+              <span class="badge badge-primary" style="margin-bottom:0.5rem;">{{ store.category }}</span>
+              <h1 style="font-family:var(--font-display);font-size:2rem;font-weight:700;margin-bottom:0.3rem;">{{ store.name }}</h1>
+              <p style="opacity:0.65;font-size:0.9rem;">📍 {{ store.address }}</p>
+
+              <div style="display:flex;gap:0.5rem;margin-top:0.8rem;flex-wrap:wrap;">
+                {% for tag in store.get_tags() %}
+                  <span class="badge badge-outline">{{ tag }}</span>
+                {% endfor %}
+              </div>
+            </div>
+
+            {% if current_user.is_authenticated and (current_user.id == store.owner_id or current_user.is_admin()) %}
+            <div style="display:flex;gap:0.5rem;flex-shrink:0;">
+              <a href="{{ url_for('edit_store', store_id=store.id) }}" class="btn btn-outline btn-sm">✏ Edit</a>
+              <form method="POST" action="{{ url_for('delete_store', store_id=store.id) }}"
+                    onsubmit="return confirm('Delete this store permanently?')">
+                <button type="submit" class="btn btn-danger btn-sm">🗑 Delete</button>
+              </form>
+            </div>
+            {% endif %}
+          </div>
+        </div>
+
+        <!-- Description -->
+        {% if store.description %}
+        <div class="card" style="padding:1.8rem;margin-bottom:1.5rem;">
+          <h2 style="font-family:var(--font-display);font-size:1.2rem;font-weight:700;margin-bottom:1rem;color:var(--primary);">About this Store</h2>
+          <p style="line-height:1.8;opacity:0.85;">{{ store.description }}</p>
+        </div>
+        {% endif %}
+
+        <!-- Map -->
+        <div class="card" style="overflow:hidden;margin-bottom:1.5rem;">
+          <div style="padding:1rem 1.5rem;border-bottom:1px solid var(--border);">
+            <h2 style="font-family:var(--font-display);font-size:1.2rem;font-weight:700;color:var(--primary);">📍 Location</h2>
+          </div>
+          <div id="storeMap" style="height:320px;"></div>
+          <div style="padding:1rem 1.5rem;font-size:0.9rem;opacity:0.75;">
+            {{ store.address }}
+          </div>
+        </div>
+      </div>
+
+      <!-- RIGHT SIDEBAR -->
+      <div>
+        <!-- Contact Info -->
+        <div class="card" style="padding:1.5rem;margin-bottom:1.5rem;">
+          <h2 style="font-family:var(--font-display);font-size:1.1rem;font-weight:700;margin-bottom:1.2rem;color:var(--primary);">Contact Info</h2>
+          <div style="display:flex;flex-direction:column;gap:0.8rem;">
+            {% if store.phone %}
+            <div style="display:flex;align-items:center;gap:0.8rem;">
+              <span style="font-size:1.2rem;">📞</span>
+              <div>
+                <p style="font-size:0.75rem;opacity:0.55;font-weight:600;text-transform:uppercase;letter-spacing:.04em;">Phone</p>
+                <a href="tel:{{ store.phone }}" style="font-weight:600;color:var(--primary);">{{ store.phone }}</a>
+              </div>
+            </div>
+            {% endif %}
+            {% if store.email %}
+            <div style="display:flex;align-items:center;gap:0.8rem;">
+              <span style="font-size:1.2rem;">✉️</span>
+              <div>
+                <p style="font-size:0.75rem;opacity:0.55;font-weight:600;text-transform:uppercase;letter-spacing:.04em;">Email</p>
+                <a href="mailto:{{ store.email }}" style="font-weight:600;color:var(--primary);">{{ store.email }}</a>
+              </div>
+            </div>
+            {% endif %}
+            {% if store.website %}
+            <div style="display:flex;align-items:center;gap:0.8rem;">
+              <span style="font-size:1.2rem;">🌐</span>
+              <div>
+                <p style="font-size:0.75rem;opacity:0.55;font-weight:600;text-transform:uppercase;letter-spacing:.04em;">Website</p>
+                <a href="{{ store.website }}" target="_blank" style="font-weight:600;color:var(--primary);">Visit Website →</a>
+              </div>
+            </div>
+            {% endif %}
+            {% if not store.phone and not store.email and not store.website %}
+            <p style="opacity:0.5;font-size:0.88rem;">No contact info provided.</p>
+            {% endif %}
+          </div>
+        </div>
+
+        <!-- Opening Hours -->
+        {% if store.opening_hours %}
+        <div class="card" style="padding:1.5rem;margin-bottom:1.5rem;">
+          <h2 style="font-family:var(--font-display);font-size:1.1rem;font-weight:700;margin-bottom:1rem;color:var(--primary);">🕐 Opening Hours</h2>
+          <p style="font-size:0.9rem;line-height:1.8;white-space:pre-line;opacity:0.8;">{{ store.opening_hours }}</p>
+        </div>
+        {% endif %}
+
+        <!-- Meta -->
+        <div class="card" style="padding:1.2rem 1.5rem;font-size:0.82rem;opacity:0.6;">
+          <p>Listed on {{ store.created_at.strftime('%B %d, %Y') }}</p>
+          <p>Owner: {{ store.owner.username }}</p>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<script>
+function initMap() {
+  // Wait for Leaflet to load
+  if (typeof L === 'undefined') {
+    console.error('Leaflet library not loaded yet');
+    setTimeout(initMap, 100);
+    return;
+  }
+
+  try {
+    const pos = [{{ store.latitude }}, {{ store.longitude }}];
+    const map = L.map('storeMap', { 
+      attributionControl: true, 
+      zoomControl: true 
+    }).setView(pos, 16);
+    
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+    }).addTo(map);
+    
+    L.marker(pos).addTo(map)
+      .bindPopup(`{{ store.name | replace("'", "\\'") }}`)
+      .openPopup();
+    
+    setTimeout(() => {
+      if (map) map.invalidateSize();
+    }, 150);
+    
+    console.log('Store detail map initialized successfully');
+  } catch (err) {
+    console.error('Error initializing store detail map:', err);
+  }
+}
+document.addEventListener('DOMContentLoaded', initMap);
+</script>
+{% endblock %}

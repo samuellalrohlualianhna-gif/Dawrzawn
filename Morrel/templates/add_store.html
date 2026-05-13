@@ -1,0 +1,358 @@
+{% extends "base.html" %}
+{% block title %}Add Store — {{ settings.site_name }}{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+<style>
+  #picker-map { 
+    height: 380px; 
+    width: 100%; 
+    border-radius: var(--radius-sm); 
+    border: 2px solid var(--border);
+    background: #f5f5f5;
+    display: block;
+    position: relative;
+    z-index: 1;
+  }
+  .leaflet-container { height: 100%; }
+  .tab { display: none; }
+  .tab.active { display: block; }
+  .step-btn {
+    padding: 0.55rem 1.6rem;
+    border-radius: 8px;
+    background: var(--primary);
+    color: white;
+    border: none;
+    font-family: var(--font-body);
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background .2s;
+  }
+  .step-btn:hover { background: var(--secondary); }
+  .step-btn.outline { background: transparent; border: 2px solid var(--primary); color: var(--primary); }
+  .step-btn.outline:hover { background: var(--primary); color: white; }
+</style>
+{% endblock %}
+
+{% block content %}
+<section class="page-header">
+  <div class="container">
+    <h1>Register Your Store</h1>
+    <p>Fill in the details and pin your location on the map</p>
+  </div>
+</section>
+
+<section class="py-4">
+  <div class="container" style="max-width:860px;">
+    <form method="POST" enctype="multipart/form-data" id="storeForm">
+
+      <!-- STEP INDICATORS -->
+      <div style="display:flex;gap:1rem;margin-bottom:2rem;align-items:center;">
+        {% for i, label in [(1,'Store Info'),(2,'Location'),(3,'Details')] %}
+        <div id="step-ind-{{ i }}" style="display:flex;align-items:center;gap:0.5rem;opacity:{% if i == 1 %}1{% else %}0.4{% endif %};">
+          <div id="step-circle-{{ i }}" style="width:32px;height:32px;border-radius:50%;background:{% if i == 1 %}var(--primary){% else %}var(--border){% endif %};color:{% if i == 1 %}white{% else %}var(--text){% endif %};display:flex;align-items:center;justify-content:center;font-weight:700;font-size:0.85rem;transition:all .3s;">{{ i }}</div>
+          <span style="font-weight:600;font-size:0.88rem;">{{ label }}</span>
+        </div>
+        {% if i < 3 %}
+        <div style="flex:1;height:2px;background:var(--border);border-radius:1px;"></div>
+        {% endif %}
+        {% endfor %}
+      </div>
+
+      <!-- STEP 1: Basic Info -->
+      <div class="tab active" id="tab-1">
+        <div class="card" style="padding:2rem;">
+          <h2 style="font-family:var(--font-display);font-size:1.3rem;font-weight:700;margin-bottom:1.5rem;color:var(--primary);">Step 1: Store Information</h2>
+
+          <div class="form-group">
+            <label>Store Name *</label>
+            <input type="text" name="name" class="form-control" placeholder="e.g. Green Valley Grocery" required>
+          </div>
+
+          <div class="form-group">
+            <label>Category *</label>
+            <select name="category" class="form-control" required>
+              <option value="">— Select a category —</option>
+              {% for cat in categories %}
+              <option value="{{ cat }}">{{ cat }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label>Description</label>
+            <textarea name="description" class="form-control" rows="4"
+                      placeholder="Describe your store — what you offer, your specialty, etc."></textarea>
+          </div>
+
+          <div class="form-group">
+            <label>Store Logo</label>
+            <input type="file" name="logo" accept="image/*" class="form-control"
+                   style="padding:0.5rem;" onchange="previewLogo(this)">
+            <div id="logoPreview" style="margin-top:0.8rem;display:none;">
+              <img id="logoImg" style="height:80px;width:80px;object-fit:cover;border-radius:10px;border:2px solid var(--primary);">
+            </div>
+            <p style="font-size:0.78rem;opacity:0.55;margin-top:0.3rem;">PNG, JPG, GIF up to 5MB</p>
+          </div>
+
+          <div style="text-align:right;">
+            <button type="button" class="step-btn" onclick="goStep(2)">Next: Set Location →</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- STEP 2: Location -->
+      <div class="tab" id="tab-2">
+        <div class="card" style="padding:2rem;">
+          <h2 style="font-family:var(--font-display);font-size:1.3rem;font-weight:700;margin-bottom:0.5rem;color:var(--primary);">Step 2: Store Location</h2>
+          <p style="opacity:0.6;font-size:0.9rem;margin-bottom:1.5rem;">Search for your address or click on the map to place the pin.</p>
+
+          <div class="form-group">
+            <label>Search Address</label>
+            <input type="text" id="addressSearch" class="form-control"
+                   placeholder="Type your store address…">
+          </div>
+
+          <div id="picker-map" style="margin-bottom:1rem;"></div>
+
+          <input type="hidden" name="latitude" id="lat_input">
+          <input type="hidden" name="longitude" id="lng_input">
+          <input type="hidden" name="address" id="addr_input">
+
+          <div id="pin-confirm" style="display:none;background:rgba(45,106,79,0.1);border-radius:8px;padding:0.8rem 1rem;font-size:0.88rem;color:var(--primary);font-weight:600;margin-bottom:1rem;">
+            ✓ Location pinned: <span id="pin-address"></span>
+          </div>
+
+          <p style="font-size:0.8rem;opacity:0.55;">* Drag the pin to fine-tune the location</p>
+
+          <div style="display:flex;justify-content:space-between;margin-top:1.2rem;">
+            <button type="button" class="step-btn outline" onclick="goStep(1)">← Back</button>
+            <button type="button" class="step-btn" onclick="validateAndGoStep3()">Next: Add Details →</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- STEP 3: Contact & Tags -->
+      <div class="tab" id="tab-3">
+        <div class="card" style="padding:2rem;">
+          <h2 style="font-family:var(--font-display);font-size:1.3rem;font-weight:700;margin-bottom:1.5rem;color:var(--primary);">Step 3: Contact & Tags</h2>
+
+          <div class="grid grid-2">
+            <div class="form-group">
+              <label>Phone Number</label>
+              <input type="tel" name="phone" class="form-control" placeholder="+91 99999 99999">
+            </div>
+            <div class="form-group">
+              <label>Email</label>
+              <input type="email" name="email" class="form-control" placeholder="store@email.com">
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label>Website</label>
+            <input type="url" name="website" class="form-control" placeholder="https://yourstore.com">
+          </div>
+
+          <div class="form-group">
+            <label>Opening Hours</label>
+            <textarea name="opening_hours" class="form-control" rows="3"
+                      placeholder="e.g. Mon–Fri: 9am–8pm&#10;Sat–Sun: 10am–6pm"></textarea>
+          </div>
+
+          <div class="form-group">
+            <label>Tags</label>
+            <div class="checkbox-grid">
+              {% for tag in tags %}
+              <label>
+                <input type="checkbox" name="tags" value="{{ tag }}">
+                <span>{{ tag }}</span>
+              </label>
+              {% endfor %}
+            </div>
+          </div>
+
+          <div style="background:rgba(212,160,23,0.1);border-left:3px solid var(--accent);padding:0.8rem 1rem;border-radius:0 8px 8px 0;margin-bottom:1.5rem;font-size:0.88rem;">
+            <strong>Note:</strong> Your store will be reviewed by an admin before appearing publicly.
+          </div>
+
+          <div style="display:flex;justify-content:space-between;">
+            <button type="button" class="step-btn outline" onclick="goStep(2)">← Back</button>
+            <button type="submit" class="btn btn-primary btn-lg">✓ Submit Store</button>
+          </div>
+        </div>
+      </div>
+
+    </form>
+  </div>
+</section>
+
+<script>
+let map, marker, currentStep = 1;
+
+function goStep(n) {
+  document.getElementById('tab-' + currentStep).classList.remove('active');
+  document.getElementById('tab-' + n).classList.add('active');
+  currentStep = n;
+  // Update indicators
+  for (let i = 1; i <= 3; i++) {
+    const circle = document.getElementById('step-circle-' + i);
+    document.getElementById('step-ind-' + i).style.opacity = i === n ? 1 : 0.4;
+    circle.style.background = i <= n ? 'var(--primary)' : 'var(--border)';
+    circle.style.color = i <= n ? 'white' : 'var(--text)';
+  }
+  if (n === 2 && !map) setTimeout(initPickerMap, 200);
+}
+
+async function initPickerMap() {
+  if (map) return;
+  
+  // Wait for Leaflet to load
+  if (typeof L === 'undefined') {
+    console.error('Leaflet library not loaded yet');
+    setTimeout(initPickerMap, 100);
+    return;
+  }
+
+  try {
+    const mapContainer = document.getElementById('picker-map');
+    if (!mapContainer) {
+      console.error('Map container not found');
+      return;
+    }
+
+    console.log('Map container found, creating map...');
+    
+    map = L.map('picker-map', { 
+      attributionControl: true,
+      zoomControl: true,
+      preferCanvas: false
+    }).setView([23.7, 92.7], 13);
+    
+    console.log('Map object created, adding tile layer');
+    
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+    }).addTo(map);
+    
+    console.log('Tile layer added, adding marker');
+
+    marker = L.marker([23.7, 92.7], { draggable: true }).addTo(map);
+    marker.setOpacity(0);
+    
+    marker.on('dragend', e => {
+      console.log('Marker dragged');
+      updatePin(e.target.getLatLng());
+    });
+    map.on('click', e => {
+      console.log('Map clicked at', e.latlng);
+      placePin(e.latlng);
+    });
+
+    mapContainer.style.display = 'block';
+    setTimeout(() => {
+      if (map) {
+        map.invalidateSize(true);
+        console.log('Map size invalidated');
+      }
+    }, 200);
+
+    document.getElementById('addressSearch').addEventListener('keydown', e => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        geocodeAddress(document.getElementById('addressSearch').value);
+      }
+    });
+    
+    console.log('Map initialized successfully');
+  } catch (err) {
+    console.error('Error initializing map:', err);
+    console.error('Stack trace:', err.stack);
+  }
+}
+
+function updatePin(latlng) {
+  placePin(latlng);
+}
+
+async function geocodeAddress(query) {
+  if (!query) return;
+  const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5`;
+  try {
+    const response = await fetch(url);
+    const results = await response.json();
+    if (!results.length) {
+      alert('No address found. Try a different query.');
+      return;
+    }
+    const place = results[0];
+    const latlng = { lat: parseFloat(place.lat), lng: parseFloat(place.lon) };
+    map.setView(latlng, 16);
+    placePin(latlng);
+    setAddress(place.display_name);
+    document.getElementById('addressSearch').value = place.display_name;
+  } catch (err) {
+    console.error(err);
+    alert('Address lookup failed.');
+  }
+}
+
+function placePin(latlng) {
+  marker.setLatLng(latlng).setOpacity(1);
+  document.getElementById('lat_input').value = latlng.lat;
+  document.getElementById('lng_input').value = latlng.lng;
+  reverseGeocode(latlng);
+}
+
+async function reverseGeocode(latlng) {
+  const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latlng.lat}&lon=${latlng.lng}`;
+  try {
+    const response = await fetch(url);
+    const data = await response.json();
+    if (data && data.display_name) {
+      setAddress(data.display_name);
+    } else {
+      setAddress(`${latlng.lat.toFixed(6)}, ${latlng.lng.toFixed(6)}`);
+    }
+  } catch (err) {
+    setAddress(`${latlng.lat.toFixed(6)}, ${latlng.lng.toFixed(6)}`);
+  }
+}
+
+function setAddress(addr) {
+  document.getElementById('addr_input').value = addr;
+  document.getElementById('pin-address').textContent = addr;
+  document.getElementById('pin-confirm').style.display = 'block';
+}
+
+function validateAndGoStep3() {
+  const lat = document.getElementById('lat_input').value;
+  if (!lat) {
+    alert('Please click on the map to pin your store location first.');
+    return;
+  }
+  goStep(3);
+}
+
+function previewLogo(input) {
+  if (input.files && input.files[0]) {
+    const reader = new FileReader();
+    reader.onload = e => {
+      document.getElementById('logoImg').src = e.target.result;
+      document.getElementById('logoPreview').style.display = 'block';
+    };
+    reader.readAsDataURL(input.files[0]);
+  }
+}
+
+window.onload = function() {
+  if (!window.L) {
+    document.querySelectorAll('[onclick*="goStep(2)"]').forEach(btn => {
+      btn.title = 'Note: Leaflet failed to load. Please check your internet connection.';
+    });
+  }
+};
+</script>
+{% endblock %}
